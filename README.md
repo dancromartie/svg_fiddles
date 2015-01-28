@@ -7,4 +7,7 @@ This is a clock made with Raphael.js.
 http://jsfiddle.net/0g9kaj9k/4/
 
 ## Distributional Updating ##
-http://jsfiddle.net/Lembrfzj/20/
+http://jsfiddle.net/Lembrfzj/21/
+
+## Thermometer ##
+http://jsfiddle.net/hwrz66Lz/6/
