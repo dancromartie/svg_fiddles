@@ -11,3 +11,6 @@ http://jsfiddle.net/Lembrfzj/21/
 
 ## Thermometer ##
 http://jsfiddle.net/hwrz66Lz/6/
+
+## Do Stuff Clocks ##
+http://jsfiddle.net/q0dka4qn/22/
