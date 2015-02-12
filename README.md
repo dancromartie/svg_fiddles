@@ -3,14 +3,17 @@ random front-end things made with raphael.js, d3.js, etc
 
 ## SVG Clock ##
 
-This is a clock made with Raphael.js.  
-http://jsfiddle.net/0g9kaj9k/4/
+This is a clock made with Raphael.js
+https://jsfiddle.net/0g9kaj9k/5/
 
 ## Distributional Updating ##
-http://jsfiddle.net/Lembrfzj/21/
+Shows an algorithm for fast tracking of distributional data
+https://jsfiddle.net/Lembrfzj/22/
 
-## Thermometer ##
-http://jsfiddle.net/hwrz66Lz/6/
+## SVG Thermometer ##
+A good toy example of how SVG path and elipses work
+https://jsfiddle.net/hwrz66Lz/7/
 
-## Do Stuff Clocks ##
-http://jsfiddle.net/q0dka4qn/22/
+## Do Stuff Timers ##
+Simple tool for maintaining multiple dimers
+https://jsfiddle.net/q0dka4qn/23/
