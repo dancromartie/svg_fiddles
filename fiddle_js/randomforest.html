@@ -71,11 +71,8 @@ point will be highlighted amongst the training data as well. Try .5 and .5 to st
 </style>
 
 <script type='text/javascript'>
-
 var MAX_DEPTH = 4;
 
-var X_WIDTH = 600;
-var Y_HEIGHT = 400;
 var MAX_X_NOISE = 0.3;
 var MAX_Y_NOISE = 0.3;
 var MIN_SEARCH = 0;
@@ -83,10 +80,11 @@ var MAX_SEARCH = 1;
 var SEARCH_STEP_SIZE = .01;
 var BRANCH_DELAY_MS = 1000;
 var LINE_DELAY_MS = 100;
-
 var NUM_DOTS_PER_CLASS = 70;
 
 // VISUAL STUFF
+var X_WIDTH = 600;
+var Y_HEIGHT = 400;
 var CLASSIFICATION_DOT_COLOR = 'yellow';
 var CLASSIFICATION_PATH_COLOR = 'yellow';
 var CLASSIFICATION_PATH_WIDTH = 3;
@@ -220,43 +218,43 @@ function TreeNode(tree, parent, orig_data, depth, x, y) {
     });
   }
 
-  self.get_line_from_parent_path = function(){
-      var line_from_parent_path = "M";
-      line_from_parent_path += this.parent.get_svg_coord_string();
-      line_from_parent_path += " L " + this.get_svg_coord_string();
-      return line_from_parent_path;
+  self.get_line_from_parent_path = function() {
+    var line_from_parent_path = "M";
+    line_from_parent_path += this.parent.get_svg_coord_string();
+    line_from_parent_path += " L " + this.get_svg_coord_string();
+    return line_from_parent_path;
   }
   self.get_svg_coord_string = function() {
     return self.x + "," + self.y;
   }
 
-  self.classify_new = function(new_x, new_y){
-    if(this.left_child == null && this.right_child == null){
-        return get_votes(this.orig_data);
+  self.classify_new = function(new_x, new_y) {
+    if (this.left_child == null && this.right_child == null) {
+      return get_votes(this.orig_data);
     }
-    if(self.parent){
-        var line_from_parent_path = self.get_line_from_parent_path();
-        var line_from_parent = self.tree.tree_paper.path(line_from_parent_path);
-        new_classification_paths.push(line_from_parent);
-        line_from_parent.attr({
-            fill: CLASSIFICATION_PATH_COLOR,
-            stroke: CLASSIFICATION_PATH_COLOR,
-            'stroke-width': CLASSIFICATION_PATH_WIDTH
-        });
+    if (self.parent) {
+      var line_from_parent_path = self.get_line_from_parent_path();
+      var line_from_parent = self.tree.tree_paper.path(line_from_parent_path);
+      new_classification_paths.push(line_from_parent);
+      line_from_parent.attr({
+        fill: CLASSIFICATION_PATH_COLOR,
+        stroke: CLASSIFICATION_PATH_COLOR,
+        'stroke-width': CLASSIFICATION_PATH_WIDTH
+      });
     }
 
-    if(this.split_dimension == "x"){
-        if(this.split_thresh < new_x){
-            return this.right_child.classify_new(new_x, new_y);
-        }else{
-          return this.left_child.classify_new(new_x, new_y);
-        }
-    }
-  
-    if(this.split_dimension == "y"){
-      if(this.split_thresh < new_y){
+    if (this.split_dimension == "x") {
+      if (this.split_thresh < new_x) {
         return this.right_child.classify_new(new_x, new_y);
-      }else{
+      } else {
+        return this.left_child.classify_new(new_x, new_y);
+      }
+    }
+
+    if (this.split_dimension == "y") {
+      if (this.split_thresh < new_y) {
+        return this.right_child.classify_new(new_x, new_y);
+      } else {
         return this.left_child.classify_new(new_x, new_y);
       }
     }
@@ -270,11 +268,11 @@ function Tree(tree_id, orig_data_paper, tree_paper) {
   self.orig_data_paper = orig_data_paper;
   self.tree_paper = tree_paper;
 
-  this.show_all_dots = function(){
+  this.show_all_dots = function() {
     _.each(this.orig_data, function(dot) {
-        dot.rendered_dot.attr({
-          fill: dot.class
-        });
+      dot.rendered_dot.attr({
+        fill: dot.class
+      });
     });
   }
 
@@ -297,10 +295,10 @@ function Tree(tree_id, orig_data_paper, tree_paper) {
     });
   }
 
-  self.show_new_classification_dot = function(new_x, new_y){
-        var new_dot = new Dot(-1, new_x, new_y, CLASSIFICATION_DOT_COLOR);
-        new_dot.render(orig_data_paper);
-        new_classification_dots.push(new_dot);
+  self.show_new_classification_dot = function(new_x, new_y) {
+    var new_dot = new Dot(-1, new_x, new_y, CLASSIFICATION_DOT_COLOR);
+    new_dot.render(orig_data_paper);
+    new_classification_dots.push(new_dot);
   }
 
   self.create_dots = function() {
@@ -331,21 +329,21 @@ function Tree(tree_id, orig_data_paper, tree_paper) {
   });
 
   self.move_line = function(dimension, value) {
-      if (dimension == "x") {
-        var x_start = value * X_WIDTH;
-        var x_finish = x_start;
-        var y_start = 0;
-        var y_finish = Y_HEIGHT;
-      } else if (dimension == "y") {
-        var x_start = 0;
-        var x_finish = X_WIDTH;
-        var y_start = Y_HEIGHT - value * Y_HEIGHT;
-        var y_finish = y_start;
-      }
-      var path = "M" + x_start + "," + y_start + " L " + x_finish + "," + y_finish;
-      this.search_line.animate({
-        path: path
-      }, LINE_DELAY_MS);
+    if (dimension == "x") {
+      var x_start = value * X_WIDTH;
+      var x_finish = x_start;
+      var y_start = 0;
+      var y_finish = Y_HEIGHT;
+    } else if (dimension == "y") {
+      var x_start = 0;
+      var x_finish = X_WIDTH;
+      var y_start = Y_HEIGHT - value * Y_HEIGHT;
+      var y_finish = y_start;
+    }
+    var path = "M" + x_start + "," + y_start + " L " + x_finish + "," + y_finish;
+    this.search_line.animate({
+      path: path
+    }, LINE_DELAY_MS);
   }
   self.move_line("x", .5);
 
@@ -376,7 +374,7 @@ var calc_entropy = function(dots_in_node) {
   return entropy;
 }
 
-var get_votes = function(dots){
+var get_votes = function(dots) {
   var votes = {};
   var grouped = _.groupBy(dots, function(d) {
     return d.class;
@@ -467,63 +465,64 @@ root_3 = new TreeNode(tree_3, null, tree_3.orig_data, 0, 200, 20);
 root_3.split()
 
 
-$(document).ready(function(){
-    $("#submit-classification-button").click(function(){
-        $("#votes").html("");
-        _.each(new_classification_dots, function(d){
-            d.rendered_dot.remove();
-            new_classification_dots = [];
-        });
-        _.each(new_classification_paths, function(p){
-            p.remove();
-            new_classification_paths = [];
-        });
-        var new_x = parseFloat($("#user-x").val());
-        var new_y = parseFloat($("#user-y").val());
-        console.log(new_x, new_y);
-
-        tree_1.show_all_dots();
-        tree_2.show_all_dots();
-        tree_3.show_all_dots();
-        tree_1.show_new_classification_dot(new_x, new_y);
-        tree_2.show_new_classification_dot(new_x, new_y);
-        tree_3.show_new_classification_dot(new_x, new_y);
-
-        var tree_1_votes = root_1.classify_new(new_x, new_y);
-        var tree_2_votes = root_2.classify_new(new_x, new_y);
-        var tree_3_votes = root_3.classify_new(new_x, new_y);
-
-        $("<h3>Tree 1 Votes</h3>").appendTo("#votes");
-        $("<p></p>").text(JSON.stringify(tree_1_votes)).appendTo("#votes");
-        $("<h3>Tree 2 Votes</h3>").appendTo("#votes");
-        $("<p></p>").text(JSON.stringify(tree_2_votes)).appendTo("#votes");
-        $("<h3>Tree 3 Votes</h3>").appendTo("#votes");
-        $("<p></p>").text(JSON.stringify(tree_3_votes)).appendTo("#votes");
-
-        var all_votes = [tree_1_votes, tree_2_votes, tree_3_votes];
-        var vote_sums = {};
-        var winner = null;
-        var best_score = 0;
-        _.each(_.keys(COLOR_DIST), function(color){
-            vote_sums[color] = 0;
-        });
-        _.each(all_votes, function(vote_set){
-            _.each(_.keys(vote_set), function(color){
-                vote_sums[color] += vote_set[color];
-                if(vote_sums[color] > best_score){
-                    winner = color;
-                    best_score = vote_sums[color];
-                }
-            });
-        });
-        
-        $("<h3>Summed Votes</h3>").appendTo("#votes");
-        $("<p></p>").text(JSON.stringify(vote_sums)).appendTo("#votes");
-
-        $("<h3>Final Vote</h3>").appendTo("#votes");
-        $("<p></p>").text(winner).appendTo("#votes");
-
+$(document).ready(function() {
+  $("#submit-classification-button").click(function() {
+    $("#votes").html("");
+    _.each(new_classification_dots, function(d) {
+      d.rendered_dot.remove();
+      new_classification_dots = [];
     });
+    _.each(new_classification_paths, function(p) {
+      p.remove();
+      new_classification_paths = [];
+    });
+    var new_x = parseFloat($("#user-x").val());
+    var new_y = parseFloat($("#user-y").val());
+    console.log(new_x, new_y);
+
+    tree_1.show_all_dots();
+    tree_2.show_all_dots();
+    tree_3.show_all_dots();
+    tree_1.show_new_classification_dot(new_x, new_y);
+    tree_2.show_new_classification_dot(new_x, new_y);
+    tree_3.show_new_classification_dot(new_x, new_y);
+
+    var tree_1_votes = root_1.classify_new(new_x, new_y);
+    var tree_2_votes = root_2.classify_new(new_x, new_y);
+    var tree_3_votes = root_3.classify_new(new_x, new_y);
+
+    $("<h3>Tree 1 Votes</h3>").appendTo("#votes");
+    $("<p></p>").text(JSON.stringify(tree_1_votes)).appendTo("#votes");
+    $("<h3>Tree 2 Votes</h3>").appendTo("#votes");
+    $("<p></p>").text(JSON.stringify(tree_2_votes)).appendTo("#votes");
+    $("<h3>Tree 3 Votes</h3>").appendTo("#votes");
+    $("<p></p>").text(JSON.stringify(tree_3_votes)).appendTo("#votes");
+
+    var all_votes = [tree_1_votes, tree_2_votes, tree_3_votes];
+    var vote_sums = {};
+    var winner = null;
+    var best_score = 0;
+    _.each(_.keys(COLOR_DIST), function(color) {
+      vote_sums[color] = 0;
+    });
+    _.each(all_votes, function(vote_set) {
+      _.each(_.keys(vote_set), function(color) {
+        vote_sums[color] += vote_set[color];
+        if (vote_sums[color] > best_score) {
+          winner = color;
+          best_score = vote_sums[color];
+        }
+      });
+    });
+
+    $("<h3>Summed Votes</h3>").appendTo("#votes");
+    $("<p></p>").text(JSON.stringify(vote_sums)).appendTo("#votes");
+
+    $("<h3>Final Vote</h3>").appendTo("#votes");
+    $("<p></p>").text(winner).appendTo("#votes");
+
+  });
 });
+
 
 </script>
