@@ -1,0 +1,529 @@
+<script type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.4/jquery.min.js'></script>
+<script type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js'></script>
+<script type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/raphael/2.1.4/raphael-min.js'></script>
+
+<h2>Random Forest Visualization</h2>
+<p>This is a way to see a <a target="_blank" href='https://en.wikipedia.org/wiki/Random_forest'>Random Forest</a> being built in real time. Random Forests are not the most difficult thing in the world to understand, but I wanted to test my understanding and have a better visual picture in my mind of what is happening.</p>
+<p>For newbies, the idea is that in this sample dataset, dots tend to be colored based off of where they are on the grid.  We are trying to build a model that will predict the color of new dots while only knowing its x coordinate and y coordinate.  Although we use x, y, and colors here, this technique could also be used to detect spam, recognize faces, or underwrite loans, for example.</p>
+<p>Note that I do not sample from a finite population, but rather from a theoretical distribution - I didn't really do any bootstrapping here.</p>
+<p>I chose 1 feature at random at each node to split on - i.e. either the x coordinate or the y coordinate.</p>
+<p>Below, you can classify a new observation using the forest after the trees are built. The tree branches where the new observation falls will be highlighted, and the 
+point will be highlighted amongst the training data as well. Try .5 and .5 to start.</p>
+<p>I appreciate any corrections that you might have!</p>
+
+<div class='row'>
+    <div id='orig-data-canvas-1' class='data-canvas'>
+
+    </div>
+
+
+    <div id='train-canvas-1' class='train-canvas'>
+
+    </div>
+</div>
+
+
+<div class='row'>
+    <div id='orig-data-canvas-2' class='data-canvas'>
+
+    </div>
+
+
+    <div id='train-canvas-2' class='train-canvas'>
+
+    </div>
+</div>
+
+<div class='row'>
+    <div id='orig-data-canvas-3' class='data-canvas'>
+
+    </div>
+
+
+    <div id='train-canvas-3' class='train-canvas'>
+
+    </div>
+</div>
+
+<div class='row'>
+    <p>Classify a point with the form below. (wait for the tree building to finish)</p>
+    new X (0.0 - 1.0): <input id='user-x' />, new Y (0.0 - 1.0): <input id='user-y' />
+    <button id='submit-classification-button'>submit</button>
+</div>
+<br/>
+
+<div id='votes' class='row'>
+
+</div>
+
+<style type='text/css'>
+    .train-canvas, .data-canvas{
+      width: 600px;
+      height: 400px;
+      margin-top: 10px;
+    }
+    .train-canvas, .data-canvas{
+        float: left;
+    }
+    .row{
+        clear: both;
+    }
+</style>
+
+<script type='text/javascript'>
+
+var MAX_DEPTH = 4;
+
+var X_WIDTH = 600;
+var Y_HEIGHT = 400;
+var MAX_X_NOISE = 0.3;
+var MAX_Y_NOISE = 0.3;
+var MIN_SEARCH = 0;
+var MAX_SEARCH = 1;
+var SEARCH_STEP_SIZE = .01;
+var BRANCH_DELAY_MS = 1000;
+var LINE_DELAY_MS = 100;
+
+var NUM_DOTS_PER_CLASS = 70;
+
+// VISUAL STUFF
+var CLASSIFICATION_DOT_COLOR = 'yellow';
+var CLASSIFICATION_PATH_COLOR = 'yellow';
+var CLASSIFICATION_PATH_WIDTH = 3;
+var LINE_COLOR = 'orange';
+var DOT_RADIUS = 7;
+var BRANCH_X_DELTA = 100;
+var BRANCH_Y_DELTA = 100;
+var COLOR_DIST = {
+  "red": {
+    "x_mean": .25,
+    "y_mean": .6
+  },
+  "green": {
+    "x_mean": .4,
+    "y_mean": .5
+  },
+  "blue": {
+    "x_mean": .55,
+    "y_mean": .4
+  }
+}
+
+// Globals (I want to be able to easily remove these at any point...)
+new_classification_dots = [];
+new_classification_paths = [];
+
+function Dot(id, dot_x, dot_y, dot_color) {
+  var self = this;
+  self.id = id;
+  self.x = dot_x;
+  self.y = dot_y;
+  self.class = dot_color;
+  self.render = function(paper) {
+    var visual_x = self.x * X_WIDTH;
+    var visual_y = Y_HEIGHT - self.y * Y_HEIGHT;
+    var rendered_dot = paper.circle(visual_x, visual_y, DOT_RADIUS);
+    rendered_dot.attr({
+      fill: self.class,
+      stroke: 'black',
+      'stroke-width': 3
+    });
+    self.rendered_dot = rendered_dot;
+  }
+}
+
+function TreeNode(tree, parent, orig_data, depth, x, y) {
+  var self = this;
+  self.orig_data = orig_data;
+  // x, y only for display, not stats calculations
+  self.x = x;
+  self.y = y;
+  self.tree = tree;
+  console.log("making tree node for tree", self.tree.id)
+  self.depth = depth;
+  self.parent = parent;
+  self.split_dimension = null;
+  self.split_thresh = null;
+  self.left_child = null;
+  self.right_child = null;
+  self.split = function() {
+    if (self.depth >= MAX_DEPTH) {
+      return;
+    }
+    console.log("In split function for tree", self.tree.id)
+    if (self.orig_data.length == 0) {
+      return;
+    }
+    var left_child_x = self.x - BRANCH_X_DELTA / (self.depth + 1);
+    var right_child_x = self.x + BRANCH_X_DELTA / (self.depth + 1);
+    var left_child_y = self.y + BRANCH_Y_DELTA;
+    var right_child_y = self.y + BRANCH_Y_DELTA;
+
+    // Kind of mixing up rendering and data but I think I have to do it here?
+    console.log("about to call active dots for ", self.tree);
+    self.tree.show_only_active_dots(self.orig_data);
+    var initial_split = {
+      "dimension": "z",
+      "gain": -1000,
+      "thresh": 0
+    };
+
+    self.split_dimension = Math.random() < .5 ? "x" : "y";
+    var best_split = find_better_split(self.tree, self.split_dimension, self.orig_data, 0, initial_split);
+    self.split_thresh = best_split["thresh"];
+    var gain = best_split["gain"];
+
+
+    var splitup_data = send_through_split(
+      self.orig_data, self.split_dimension, self.split_thresh
+    );
+    var left_data = splitup_data.left;
+    var right_data = splitup_data.right;
+
+    self.left_child = new TreeNode(
+      self.tree, self, left_data, self.depth + 1, left_child_x, left_child_y
+    );
+    self.right_child = new TreeNode(
+      self.tree, self, right_data, self.depth + 1, right_child_x, right_child_y
+    );
+
+    // Only split if there are benefits
+    if (gain > .001) {
+      setTimeout(self.left_child.split, BRANCH_DELAY_MS);
+      setTimeout(self.right_child.split, 2000);
+    }
+    self.render();
+
+  }
+  self.render = function() {
+    var rendered_dot = self.tree.tree_paper.circle(self.x, self.y, DOT_RADIUS);
+    if (self.depth != MAX_DEPTH - 1) {
+      var split_text = self.split_dimension + "=" + self.split_thresh.toFixed(2);
+      var rendered_split_text = self.tree.tree_paper.text(self.x + 30, self.y, split_text);
+    }
+    if (self.parent) {
+      var line_from_parent_path = self.get_line_from_parent_path();
+      var line_from_parent = self.tree.tree_paper.path(line_from_parent_path);
+    }
+    // Show the data as tiny dots
+    _.each(orig_data, function(dot) {
+      // Just give a little jitter, will probably be good enough
+      var jitter_size = 20;
+      var obsv_symbol_x = self.x + Math.random() * jitter_size - jitter_size / 2;
+      var obsv_symbol_y = self.y + Math.random() * jitter_size - jitter_size / 2;
+      var obsv_symbol = self.tree.tree_paper.circle(obsv_symbol_x, obsv_symbol_y, 3);
+      obsv_symbol.attr({
+        fill: dot.class,
+        stroke: 'black',
+        'stroke-width': 1
+      });
+    });
+  }
+
+  self.get_line_from_parent_path = function(){
+      var line_from_parent_path = "M";
+      line_from_parent_path += this.parent.get_svg_coord_string();
+      line_from_parent_path += " L " + this.get_svg_coord_string();
+      return line_from_parent_path;
+  }
+  self.get_svg_coord_string = function() {
+    return self.x + "," + self.y;
+  }
+
+  self.classify_new = function(new_x, new_y){
+    if(this.left_child == null && this.right_child == null){
+        return get_votes(this.orig_data);
+    }
+    if(self.parent){
+        var line_from_parent_path = self.get_line_from_parent_path();
+        var line_from_parent = self.tree.tree_paper.path(line_from_parent_path);
+        new_classification_paths.push(line_from_parent);
+        line_from_parent.attr({
+            fill: CLASSIFICATION_PATH_COLOR,
+            stroke: CLASSIFICATION_PATH_COLOR,
+            'stroke-width': CLASSIFICATION_PATH_WIDTH
+        });
+    }
+
+    if(this.split_dimension == "x"){
+        if(this.split_thresh < new_x){
+            return this.right_child.classify_new(new_x, new_y);
+        }else{
+          return this.left_child.classify_new(new_x, new_y);
+        }
+    }
+  
+    if(this.split_dimension == "y"){
+      if(this.split_thresh < new_y){
+        return this.right_child.classify_new(new_x, new_y);
+      }else{
+        return this.left_child.classify_new(new_x, new_y);
+      }
+    }
+  }
+}
+
+function Tree(tree_id, orig_data_paper, tree_paper) {
+  self = this;
+  self.id = tree_id;
+  console.log("Tree id is", self.id)
+  self.orig_data_paper = orig_data_paper;
+  self.tree_paper = tree_paper;
+
+  this.show_all_dots = function(){
+    _.each(this.orig_data, function(dot) {
+        dot.rendered_dot.attr({
+          fill: dot.class
+        });
+    });
+  }
+
+  this.show_only_active_dots = function(active_dots) {
+    console.log("showing active dots for tree", self.id)
+    var ids_of_active_dots = {};
+    _.each(active_dots, function(dot) {
+      ids_of_active_dots[dot.id] = 1;
+    });
+    _.each(this.orig_data, function(dot) {
+      if (dot.id in ids_of_active_dots) {
+        dot.rendered_dot.attr({
+          fill: dot.class
+        });
+      } else {
+        dot.rendered_dot.attr({
+          fill: 'white'
+        });
+      }
+    });
+  }
+
+  self.show_new_classification_dot = function(new_x, new_y){
+        var new_dot = new Dot(-1, new_x, new_y, CLASSIFICATION_DOT_COLOR);
+        new_dot.render(orig_data_paper);
+        new_classification_dots.push(new_dot);
+  }
+
+  self.create_dots = function() {
+    var dots = [];
+    var dot_id = 0;
+    var color_names = _.keys(COLOR_DIST);
+    _.each(color_names, function(color) {
+      for (var i = 0; i < NUM_DOTS_PER_CLASS; i++) {
+        var x_noise = (Math.random() - .5) * MAX_X_NOISE;
+        var y_noise = (Math.random() - .5) * MAX_Y_NOISE;
+        var x_coord = x_noise + COLOR_DIST[color]['x_mean'];
+        var y_coord = y_noise + COLOR_DIST[color]['y_mean'];
+        var new_dot = new Dot(dot_id, x_coord, y_coord, color);
+        dots.push(new_dot);
+        new_dot.render(orig_data_paper);
+        dot_id += 1;
+      }
+    });
+    shuffle(dots);
+    return dots;
+  }
+
+  self.search_line = self.orig_data_paper.path("");
+  self.search_line.attr({
+    fill: LINE_COLOR,
+    stroke: LINE_COLOR,
+    'stroke-width': 3
+  });
+
+  self.move_line = function(dimension, value) {
+      if (dimension == "x") {
+        var x_start = value * X_WIDTH;
+        var x_finish = x_start;
+        var y_start = 0;
+        var y_finish = Y_HEIGHT;
+      } else if (dimension == "y") {
+        var x_start = 0;
+        var x_finish = X_WIDTH;
+        var y_start = Y_HEIGHT - value * Y_HEIGHT;
+        var y_finish = y_start;
+      }
+      var path = "M" + x_start + "," + y_start + " L " + x_finish + "," + y_finish;
+      this.search_line.animate({
+        path: path
+      }, LINE_DELAY_MS);
+  }
+  self.move_line("x", .5);
+
+
+  self.orig_data = self.create_dots();
+}
+
+var calc_information_gain = function(orig_dots, left_dots, right_dots) {
+  // Call it a negative information gain if it left out some nodes
+  if (left_dots.length == 0 || right_dots.length == 0) {
+    return -1;
+  }
+  var ig = calc_entropy(orig_dots);
+  ig -= left_dots.length * 1.0 * calc_entropy(left_dots) / orig_dots.length;
+  ig -= right_dots.length * 1.0 * calc_entropy(right_dots) / orig_dots.length;
+  return ig;
+}
+
+var calc_entropy = function(dots_in_node) {
+  var grouped = _.groupBy(dots_in_node, function(d) {
+    return d.class;
+  });
+  var entropy = 0;
+  _.each(_.keys(grouped), function(class_) {
+    var p = grouped[class_].length * 1.0 / dots_in_node.length;
+    entropy -= Math.log2(p) * p;
+  });
+  return entropy;
+}
+
+var get_votes = function(dots){
+  var votes = {};
+  var grouped = _.groupBy(dots, function(d) {
+    return d.class;
+  });
+  _.each(_.keys(grouped), function(class_) {
+    votes[class_] = grouped[class_].length * 1.0 / dots.length;
+  });
+  return votes;
+}
+
+var find_better_split = function(tree, dimension, orig_dots, curr_search_val, better_split) {
+  // Make this call itself so we can animate better with setTimeout
+  //var best_split = {"dimension": "z", "gain": -1000, "thresh": 0};
+  var splits = [];
+  if (curr_search_val > MAX_SEARCH) {
+    tree.move_line(better_split["dimension"], better_split["thresh"]);
+    return better_split;
+  }
+
+  if (curr_search_val <= MAX_SEARCH) {
+    curr_search_val += SEARCH_STEP_SIZE;
+    var splitup = send_through_split(orig_dots, dimension, curr_search_val);
+    var gain = calc_information_gain(orig_dots, splitup["left"], splitup["right"]);
+    if (gain > better_split["gain"]) {
+      better_split = {
+        "dimension": dimension,
+        "thresh": curr_search_val,
+        "gain": gain
+      };
+    }
+    return find_better_split(tree, dimension, orig_dots, curr_search_val, better_split);
+
+  }
+}
+
+var send_through_split = function(orig_dots, dimension, thresh) {
+
+  // Return a left array and a right array
+  var left_array = [];
+  var right_array = [];
+  _.each(orig_dots, function(dot) {
+    var splits_left = null;
+    if (dimension == "x") {
+      splits_left = dot.x < thresh;
+    } else if (dimension == "y") {
+      splits_left = dot.y < thresh;
+    }
+    if (splits_left) {
+      left_array.push(dot);
+    } else {
+      right_array.push(dot);
+    }
+  });
+  return {
+    "left": left_array,
+    "right": right_array
+  };
+
+}
+
+
+
+function shuffle(o) {
+  // stolen from Stack Overflow
+  for (var j, x, i = o.length; i; j = Math.floor(Math.random() * i), x = o[--i], o[i] = o[j], o[j] = x);
+  return o;
+}
+
+
+
+var orig_data_paper_1 = new Raphael(document.getElementById('orig-data-canvas-1'), X_WIDTH, Y_HEIGHT);
+var orig_data_paper_2 = new Raphael(document.getElementById('orig-data-canvas-2'), X_WIDTH, Y_HEIGHT);
+var orig_data_paper_3 = new Raphael(document.getElementById('orig-data-canvas-3'), X_WIDTH, Y_HEIGHT);
+
+var tree_paper_1 = new Raphael(document.getElementById('train-canvas-1'), X_WIDTH, Y_HEIGHT);
+var tree_paper_2 = new Raphael(document.getElementById('train-canvas-2'), X_WIDTH, Y_HEIGHT);
+var tree_paper_3 = new Raphael(document.getElementById('train-canvas-3'), X_WIDTH, Y_HEIGHT);
+
+var tree_1 = new Tree(1, orig_data_paper_1, tree_paper_1);
+var tree_2 = new Tree(2, orig_data_paper_2, tree_paper_2);
+var tree_3 = new Tree(3, orig_data_paper_3, tree_paper_3);
+
+root_1 = new TreeNode(tree_1, null, tree_1.orig_data, 0, 200, 20);
+root_1.split()
+root_2 = new TreeNode(tree_2, null, tree_2.orig_data, 0, 200, 20);
+root_2.split()
+root_3 = new TreeNode(tree_3, null, tree_3.orig_data, 0, 200, 20);
+root_3.split()
+
+
+$(document).ready(function(){
+    $("#submit-classification-button").click(function(){
+        $("#votes").html("");
+        _.each(new_classification_dots, function(d){
+            d.rendered_dot.remove();
+            new_classification_dots = [];
+        });
+        _.each(new_classification_paths, function(p){
+            p.remove();
+            new_classification_paths = [];
+        });
+        var new_x = parseFloat($("#user-x").val());
+        var new_y = parseFloat($("#user-y").val());
+        console.log(new_x, new_y);
+
+        tree_1.show_all_dots();
+        tree_2.show_all_dots();
+        tree_3.show_all_dots();
+        tree_1.show_new_classification_dot(new_x, new_y);
+        tree_2.show_new_classification_dot(new_x, new_y);
+        tree_3.show_new_classification_dot(new_x, new_y);
+
+        var tree_1_votes = root_1.classify_new(new_x, new_y);
+        var tree_2_votes = root_2.classify_new(new_x, new_y);
+        var tree_3_votes = root_3.classify_new(new_x, new_y);
+
+        $("<h3>Tree 1 Votes</h3>").appendTo("#votes");
+        $("<p></p>").text(JSON.stringify(tree_1_votes)).appendTo("#votes");
+        $("<h3>Tree 2 Votes</h3>").appendTo("#votes");
+        $("<p></p>").text(JSON.stringify(tree_2_votes)).appendTo("#votes");
+        $("<h3>Tree 3 Votes</h3>").appendTo("#votes");
+        $("<p></p>").text(JSON.stringify(tree_3_votes)).appendTo("#votes");
+
+        var all_votes = [tree_1_votes, tree_2_votes, tree_3_votes];
+        var vote_sums = {};
+        var winner = null;
+        var best_score = 0;
+        _.each(_.keys(COLOR_DIST), function(color){
+            vote_sums[color] = 0;
+        });
+        _.each(all_votes, function(vote_set){
+            _.each(_.keys(vote_set), function(color){
+                vote_sums[color] += vote_set[color];
+                if(vote_sums[color] > best_score){
+                    winner = color;
+                    best_score = vote_sums[color];
+                }
+            });
+        });
+        
+        $("<h3>Summed Votes</h3>").appendTo("#votes");
+        $("<p></p>").text(JSON.stringify(vote_sums)).appendTo("#votes");
+
+        $("<h3>Final Vote</h3>").appendTo("#votes");
+        $("<p></p>").text(winner).appendTo("#votes");
+
+    });
+});
+
+</script>
