@@ -1,0 +1,142 @@
+<script type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.4/jquery.min.js'></script>
+
+<html>
+<h2>Steganography Visualization</h2>
+<p>This is a visualization of "Steganography" inside a video-ish thing.  Imagine that two people are trying to communicate secretly.  One could send the other 
+a video, or upload it to a particular Youtube channel.  The video could be of someone's toddler doing something cute.  Tiny bits of each frame can be edited to encode 
+a message in the video.</p>
+
+<p>Imagine each of the blue dots as the background noise in a video.  We then sneak in the bigger blue dot to encode a certain numerical value.  Although the dot is shown bigger, it would really be just like the other dots.  Both the recipients know where to look at the grid during each frame of the video.  I've done this by using a "seed string" - a string that both parties would agree on, like a bible verse or end-of-day stock prices for Google in 2012.  The sender knows where to put the special dot, the recipient knows where to look, and the sender gives information by changing the blueness of the dot in each frame (taking values 0-255).  Here, each letter of the alphabet (plus other characters) maps to a blueness level.</p>
+
+<div id='input-wrapper'>
+<h3>Input ----> </h3>
+<textarea id='input-text'>
+    The civilized man has built a coach, but has lost the use of his feet. He is supported on crutches, but lacks so much support of muscle. He has a fine Geneva watch, but he fails of the skill to tell the hour by the sun. A Greenwich nautical almanac he has, and so being sure of the information when he wants it, the man in the street does not know a star in the sky. The solstice he does not observe; the equinox he knows as little; and the whole bright calendar of the year is without a dial in his mind. His note-books impair his memory; his libraries overload his wit; the insurance-office increases the number of accidents; and it may be a question whether machinery does not encumber; whether we have not lost by refinement some energy, by a Christianity entrenched in establishments and forms, some vigor of wild virtue. For every Stoic was a Stoic; but in Christendom where is the Christian? 
+</textarea>
+<button id='play-button'>play</button>
+</div>
+
+<canvas id='noise-canvas'></canvas>
+
+<div>
+    Agreed X: <span id='current-x'>    </span>
+    Agreed Y: <span id='current-y'>    </span>
+    Blueness: <span id='current-intensity'>    </span>
+    Char: <span id='current-character'>    </span>
+</div>
+
+<h3>----> Output: </h3>
+<p id='output-text'> </p>
+
+</html>
+
+<style type='text/css'>
+    #play-button{
+        background-color: red;
+    }
+    #noise-canvas {
+        width: 500px;
+        height: 500px;
+        float: left;
+        margin-left: 20px;
+        margin-right: 20px;
+    }
+    #input-text{
+        height: 500px;
+        width: 300px;
+        float: left;
+    }
+    #input-wrapper{
+        clear: both;
+    }
+</style>
+
+<script type='text/javascript'>
+
+var RECT_SIZE = 1;
+var GRID_DIMENSIONS = [500, 500];
+
+var grid = [];
+for(var i=0; i<GRID_DIMENSIONS[0]; i++){
+    grid[i] = [];
+    for(var j=0; j<GRID_DIMENSIONS[1]; j++){
+        if(i < RECT_SIZE || GRID_DIMENSIONS[0] - i < RECT_SIZE){
+            grid[i].push(null);
+            continue;
+        }else if(j < RECT_SIZE || GRID_DIMENSIONS[1] - j < RECT_SIZE){
+            grid[i].push(null);
+            continue;
+        }else{
+            var dot = {"on": true};
+            grid[i].push(dot);
+        }
+    }
+}
+
+
+var update_grid = function(grid){
+    var input_text = $("#input-text").val();
+    var this_char_code = input_text.charCodeAt(char_counter);
+    var this_char = input_text[char_counter];
+    if(!this_char){
+        clearInterval(interval_id);
+        return;
+    }
+    var x_position = seed_indices[seed_indices.length - 1 - char_counter];
+    var y_position = seed_indices[char_counter];
+    char_counter += 1;
+    $("#noise-canvas").remove();
+    $('<canvas id="noise-canvas"></canvas>').insertAfter("#input-text");
+    var canvas = document.querySelector("canvas");
+    var context = canvas.getContext("2d");
+    for(var i=0; i<grid.length; i++){
+        for(var j=0; j<grid[i].length; j++){
+            var rendered_dot = grid[i][j];
+            if(rendered_dot == null){
+                continue;
+            }
+            var turned_on = Math.random() < .005 ? true : false;
+            if(turned_on){
+                context.fillStyle = "blue";
+                context.fillRect(i, j, RECT_SIZE, RECT_SIZE);
+            }else{
+            }
+        }
+    }
+    var color_intensity = this_char_code;
+    context.fillStyle = 'rgb(0, 0, ' + color_intensity + ')';
+    context.fillRect(x_position, y_position, RECT_SIZE * 3, RECT_SIZE * 2);
+    render_char_info(x_position, y_position, color_intensity, this_char);
+    var current_output_text = $("#output-text").text();
+    var new_output_text = current_output_text + this_char;
+    $("#output-text").text(new_output_text);
+}
+
+var render_char_info = function(curr_x, curr_y, curr_intensity, curr_char){
+    $("#current-x").text(curr_x);
+    $("#current-y").text(curr_y);
+    $("#current-intensity").text(curr_intensity);
+    $("#current-character").text(curr_char);
+}
+
+$('document').ready(function(){
+    var seed_string = "Give me fuel, give me fire, give me that which I desire";
+    // GLOBAL
+    seed_indices = [];
+    // GLOBA:
+    char_counter = 0;
+    for(var i=0; i<50; i++){
+        for(var j=0; j<seed_string.length; j++){
+            seed_indices.push(seed_string.charCodeAt(j));
+        }
+    }
+    $('#play-button').on('click', function() {
+        $("#output-text").text("");
+        clearInterval(interval_id);
+        char_counter = 0;
+        interval_id = setInterval(function(){update_grid(grid)}, 20);
+    });
+    interval_id = setInterval(function(){update_grid(grid)}, 10);
+});
+
+</script>
