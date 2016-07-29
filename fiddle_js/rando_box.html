@@ -1,0 +1,301 @@
+<script type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.4/jquery.min.js'></script>
+
+<html>
+<h2>Bouncy Entropy Box</h2>
+<p>It's hard to generate quality random numbers, and things like dice and coins are hard to beat.  People like to get random noise from atmospheric or thermal or atomic sources.  (See <a href='https://en.wikipedia.org/wiki/Random_number_generation'>this article</a> for details.)  I, however, don't have access to such fancy equipment, but as I stared at some dice, I wondered why I can't capture this randomness somehow.  I wanted to make something that emulated putting a bunch of dice in a box and shaking it.</p>
+
+<p>This lets you wiggle your mouse to somewhat randomly populate little blue dots in the box below.  The colored rectangles start moving in the box, and when they hit a blue dot, they mulitply the x and y vectors of their velocity by some random amount.  As they bump into blue dots, the x coordinate of the bumped-into dot is recorded as a random number, and the oldest dot is removed.</p>
+
+<p>Of course, you'll want to warm this up a little.  I'm not sure what the quality of these numbers is, but visually (i.e. in the box), I don't see as many patterns as in my first attempts.  The numbers may not be uniform (e.g. the colored rectangles may slightly tend to hang out in the corners), but they're probably quite unpredictable (e.g. knowing the coordinate of the last bumped dot doesn't help you predict the next, maybe).  I might follow up and see what kind of randomness tests they can pass.
+
+<p>A fun next step would be to make the colored rectangles interact with each other, much like dice in a box would.</p>
+
+<div id='crumb-dropper'>
+Wiggle mouse here to populate blue dots and move time
+</div>
+
+
+<canvas id='noise-canvas'></canvas>
+
+<div>
+Random numbers: 
+</div>
+<div id='randomness'></div>
+
+</html>
+
+<style type='text/css'>
+    .random-num{
+        margin: 2px;
+    }
+    #randomness{
+        width: 500px;
+        word-wrap: break-word;
+    }
+    #crumb-dropper{
+        border: 1px solid black;
+        width: 100px;
+        height: 100px;
+    }
+    #noise-canvas {
+        border: 1px solid black;
+    }
+</style>
+
+<script type='text/javascript'>
+
+// GLOBALS
+var RECT_SIZE = 5;
+var RECT_SIZE = 5;
+var BOX_SIZE = 500;
+var bounce_coords = [[250, 250]];
+
+var colors = ["030", "330", "630", "930", "C30", "F30",
+"033", "333", "633", "933", "C33", "F33",
+"036", "336", "636", "936", "C36", "F36",
+"039", "339", "639", "939", "C39", "F39"];
+
+var color_map = {};
+var positions = {};
+var velocities = {};
+
+for(var i =0; i<colors.length * 2; i++){
+    color_map[i.toString()] = colors[Math.floor(i/2)];
+    positions[i.toString()] = [50, 50 + i + 1]; 
+    velocities[i.toString()] = [10, 10 + i + 1]; 
+}
+
+
+var crumbs = {"1-1": 1};
+
+// Xmax, Xmin, Ymax, Ymin
+var extrema = [0, 10000, 0, 10000];
+var x_sum = 1000;
+var y_sum = 1000;
+var crumb_counter = 0;
+
+var update_grid = function(){
+    $("#noise-canvas").remove();
+    $('<canvas width="' + BOX_SIZE + '" height="' + BOX_SIZE + '" id="noise-canvas"></canvas>').insertAfter("#crumb-dropper");
+    var canvas = document.querySelector("canvas");
+    var context = canvas.getContext("2d");
+
+    for(var crumb_key in crumbs){
+        var crumb_coords = get_coords_from_crumb_key(crumb_key);
+        context.strokeStyle = "blue";
+        context.beginPath();
+        context.ellipse(crumb_coords[0], crumb_coords[1], 1, 1, 0, 0, 2 * Math.PI);
+        context.stroke();
+    }
+
+    for(var ball_key in positions){
+        var color_code = color_map[ball_key];
+        var hex_code = "#" + color_code[0] + color_code[0] + color_code[1] + color_code[1] + color_code[2] + color_code[2];
+        context.fillStyle = hex_code;
+        context.fillRect(positions[ball_key][0], positions[ball_key][1], RECT_SIZE, RECT_SIZE);
+    }
+}
+
+var get_svg_coords_for_mouse = function(page_x, page_y){
+    x_sum += page_x;
+    y_sum += page_y;
+    
+    if(x_sum > 1000000000){
+        x_sum = 10000;
+    }
+    if(y_sum > 1000000000){
+        y_sum = 10000;
+    }
+    var x = x_sum % BOX_SIZE;
+    var y = y_sum % BOX_SIZE;
+    
+    extrema[0] = Math.max(x, extrema[0]);
+    extrema[1] = Math.min(x, extrema[1]);
+    extrema[2] = Math.max(y, extrema[2]);
+    extrema[3] = Math.min(y, extrema[3]);
+    var x_input_range = extrema[0] - extrema[1];
+    var y_input_range = extrema[2] - extrema[3];
+    var dot_x = parseInt((x - extrema[1]) * 1.0 / x_input_range * BOX_SIZE);
+    var dot_y = parseInt((y - extrema[3]) * 1.0 / y_input_range * BOX_SIZE);
+    return [dot_x, dot_y];
+};
+
+
+var get_crumb_key = function(x, y){
+   return x + "-" + y; 
+};
+
+var get_coords_from_crumb_key = function(key){
+    var splitup = key.split("-");
+    var x = parseInt(splitup[0]);
+    var y = parseInt(splitup[1]);
+    return [x, y];
+};
+
+var add_crumb_at_position = function(x, y){
+    crumbs[get_crumb_key(x, y)] = crumb_counter;
+    crumb_counter += 1;
+}
+
+var has_crumb_near_position = function(x, y){
+    for(key in crumbs){
+        var crumb_coords = get_coords_from_crumb_key(key);
+        var dist = Math.sqrt(Math.pow(x - crumb_coords[0], 2) + Math.pow(y - crumb_coords[1], 2))
+        if(dist < 10){
+            return key;
+        }
+    }
+    return false;
+};
+
+var remove_oldest_crumb = function(){
+    if(Object.keys(crumbs).length < 200){
+        return 0;
+    }
+    var min_time = null;
+    var min_key = null;
+    for(key in crumbs){
+        var crumb_time = crumbs[key];
+        if(min_time == null || crumb_time < min_time){
+            min_key = key;
+            min_time = crumb_time;
+        }
+    }
+    delete crumbs[min_key];
+}
+
+
+var find_boundary = function(x, y){
+    var bound = "none";
+    if(x == 0){
+        bound = "left";
+    }else if(x == BOX_SIZE){
+        bound = "right";
+    }else if(y == 0){
+        bound = "bottom";
+    }else if(y == BOX_SIZE){
+        bound = "top";
+    }
+    if(bound != "none"){
+        //console.log("Something bounced at", x, y);
+    }
+    return bound;
+}
+
+var get_new_velocity = function(old_x_vel, old_y_vel, bound, crumb_x, crumb_y){
+    var last_bounce_coord = bounce_coords[bounce_coords.length - 1];
+    var new_x_vel = null;
+    var new_y_vel = null;
+    var scaling_factor = 4;
+    //console.log("last bounce", last_bounce_coord);
+
+    if(bound == "none"){
+        new_x_vel = old_x_vel;
+        new_y_vel = old_y_vel;
+    }
+    else if(bound == "left"){
+        new_x_vel = scaling_factor;
+        new_y_vel = old_y_vel;
+    }
+    else if(bound == "right"){
+        new_x_vel = -scaling_factor;
+        new_y_vel = old_y_vel;
+    }
+    else if(bound == "bottom"){
+        new_x_vel = old_x_vel;
+        new_y_vel = scaling_factor;
+    }
+    else if(bound == "top"){
+        new_x_vel = old_x_vel;
+        new_y_vel = -scaling_factor;
+    }
+
+    if(crumb_x != null){
+        if(crumb_x % 2 == 0){
+            new_x_vel *= Math.random() * scaling_factor;
+        }else{
+            new_y_vel *= Math.random() * scaling_factor;
+        }
+    }
+
+    if(crumb_y != null){
+        if(crumb_x % 2 == 1){
+            new_x_vel *= Math.random() * scaling_factor;
+        }else{
+            new_y_vel *= Math.random() * scaling_factor;
+        }
+    }
+
+    if(new_x_vel == 0){
+        new_x_vel = old_x_vel * 5;
+    }
+    if(new_y_vel == 0){
+        new_y_vel = old_y_vel * 5;
+    }
+
+    //console.log("new vels", bound, new_x_vel, new_y_vel);
+    return [new_x_vel, new_y_vel];
+}
+
+var move_objects_forward = function(){
+    //console.log(positions);
+    for(var ball_key in positions){
+        var curr_x = positions[ball_key][0];
+        var curr_y = positions[ball_key][1];
+
+        var curr_x_vel = velocities[ball_key][0];
+        var curr_y_vel = velocities[ball_key][1];
+
+        var new_x = Math.min(parseInt(curr_x + curr_x_vel), BOX_SIZE);
+        var new_y = Math.min(parseInt(curr_y + curr_y_vel), BOX_SIZE);
+        new_x = Math.max(new_x, 0);
+        new_y = Math.max(new_y, 0);
+
+        var bound = find_boundary(new_x, new_y);
+        var crumb_x = null;
+        var crumb_y = null;
+        var bumped_crumb = has_crumb_near_position(new_x, new_y);
+        if(bumped_crumb){
+            crumb_x = new_x;
+            crumb_y = new_y;
+        }
+        var new_velocity = get_new_velocity(curr_x_vel, curr_y_vel, bound, crumb_x, crumb_y);
+
+        // Must do this after getting new velocity because old bounces are used to determine vel
+        if(bound != "none"){
+            //console.log(crumbs);
+            bounce_coords.push([new_x, new_y]); 
+        }
+
+        velocities[ball_key][0] = new_velocity[0];
+        velocities[ball_key][1] = new_velocity[1];
+        positions[ball_key][0] = new_x;
+        positions[ball_key][1] = new_y;
+        if(bumped_crumb){
+            var rando_number = get_coords_from_crumb_key(bumped_crumb)[0] % 2047;
+            var num_numbers = $("#randomness").children().length;
+            $("#randomness").append("<div class='random-num'>" + rando_number + "</div>");
+            if(num_numbers > 10){
+                $("#randomness").children()[0].remove();
+            }
+            remove_oldest_crumb();
+        }
+    }
+
+
+};
+
+
+$('document').ready(function(){
+    //interval_id = setInterval(function(){update_grid(grid)}, 10);
+    $("#crumb-dropper").mousemove(function(event) {
+        var x = event.pageX;
+        var y = event.pageY;
+        var dot_coords = get_svg_coords_for_mouse(x, y);
+        add_crumb_at_position(dot_coords[0], dot_coords[1]);
+        move_objects_forward();
+        update_grid();
+    });
+});
+
+</script>
